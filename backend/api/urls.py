@@ -2,9 +2,9 @@ from django.urls import include, path
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.routers import DefaultRouter
 
-from recipes.views import IngredientViewSet, RecipeViewSet
-from tags.views import TagViewSet
-from users.views import AvatarView, CustomUserViewSet
+from api.views.recipes import IngredientViewSet, RecipeViewSet
+from api.views.tags import TagViewSet
+from api.views.users import AvatarView, CustomUserViewSet
 
 router = DefaultRouter()
 router.register('users', CustomUserViewSet)

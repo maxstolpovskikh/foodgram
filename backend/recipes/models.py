@@ -6,13 +6,18 @@ from tags.models import Tag
 User = get_user_model()
 
 
+CHAR_FIELD_STANDART_LENGTH = 128
+CHAR_FIELD_SMALL_LENGTH = 64
+CHAR_FIELD_LONG_LENGTH = 256
+
+
 class Ingredient(models.Model):
     name = models.CharField(
-        max_length=128,
+        max_length=CHAR_FIELD_STANDART_LENGTH,
         verbose_name='Название'
     )
     measurement_unit = models.CharField(
-        max_length=64,
+        max_length=CHAR_FIELD_SMALL_LENGTH,
         verbose_name='Единица измерения'
     )
 
@@ -32,7 +37,7 @@ class Recipe(models.Model):
         verbose_name='Автор'
     )
     name = models.CharField(
-        max_length=256,
+        max_length=CHAR_FIELD_LONG_LENGTH,
         verbose_name='Название'
     )
     image = models.ImageField(

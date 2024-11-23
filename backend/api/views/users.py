@@ -6,8 +6,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Subscription, User
-from .serializers import AvatarSerializer, SubscriptionSerializer
+from users.models import Subscription, User
+from api.serializers.users import AvatarSerializer, SubscriptionSerializer
 
 
 class AvatarView(APIView):

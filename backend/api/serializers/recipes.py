@@ -1,10 +1,10 @@
 from django.core.exceptions import ValidationError
 from rest_framework import serializers
-from tags.serializers import TagSerializer
-from users.serializers import CustomUserSerializer
 
-from api.services import Base64ImageField
-from .models import Ingredient, Recipe, RecipeIngredient, Tag
+from api.fields import Base64ImageField
+from api.serializers.tags import TagSerializer
+from api.serializers.users import CustomUserSerializer
+from recipes.models import Ingredient, Recipe, RecipeIngredient, Tag
 
 
 class IngredientSerializer(serializers.ModelSerializer):
@@ -53,7 +53,7 @@ class RecipeSerializer(serializers.ModelSerializer):
     def validate(self, data):
         tags = self.initial_data.get('tags')
         ingredients = self.initial_data.get('ingredients')
-        cooking_time = self.initial_data.get('cooking_time')
+        cooking_time = int(self.initial_data.get('cooking_time'))
 
         if cooking_time < 1:
             raise ValidationError('Слишком быстро')
@@ -63,7 +63,7 @@ class RecipeSerializer(serializers.ModelSerializer):
 
         item_list = []
         for item in ingredients:
-            if item['amount'] < 1:
+            if int(item['amount']) < 1:
                 raise ValidationError('Кол-во меньше 1')
             if item['id'] in item_list:
                 raise ValidationError('Повторяющиеся ингридиенты')

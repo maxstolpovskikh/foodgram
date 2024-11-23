@@ -1,9 +1,11 @@
+from django.contrib.auth import get_user_model
 from djoser.serializers import UserCreateSerializer, UserSerializer
 from rest_framework import serializers
 
-from api.serializers import RecipeMinifiedSerializer
-from api.services import Base64ImageField
-from .models import User
+from .minifield import RecipeMinifiedSerializer
+from api.fields import Base64ImageField
+
+User = get_user_model()
 
 
 class CustomUserCreateSerializer(UserCreateSerializer):

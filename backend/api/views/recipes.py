@@ -5,13 +5,18 @@ from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from users.serializers import RecipeMinifiedSerializer
 
-from .filters import IngredientFilter
-from .models import (Favorite, Ingredient, Recipe, RecipeIngredient,
-                     ShoppingCart)
-from .permissions import IsAuthorOrReadOnly
-from .serializers import IngredientSerializer, RecipeSerializer
+from api.filters import IngredientFilter
+from api.permissions import IsAuthorOrReadOnly
+from api.serializers.minifield import RecipeMinifiedSerializer
+from api.serializers.recipes import IngredientSerializer, RecipeSerializer
+from recipes.models import (
+    Favorite,
+    Ingredient,
+    Recipe,
+    RecipeIngredient,
+    ShoppingCart
+)
 
 
 class IngredientViewSet(viewsets.ReadOnlyModelViewSet):

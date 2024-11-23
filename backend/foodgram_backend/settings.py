@@ -60,10 +60,22 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'foodgram_backend.wsgi.application'
 
+'''
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'db.sqlite3',
+    }
+}
+'''
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': os.getenv('POSTGRES_DB', 'django'),
+        'USER': os.getenv('POSTGRES_USER', 'django'),
+        'PASSWORD': os.getenv('POSTGRES_PASSWORD', ''),
+        'HOST': os.getenv('DB_HOST', ''),
+        'PORT': os.getenv('DB_PORT', 5432)
     }
 }
 
@@ -95,6 +107,7 @@ USE_L10N = True
 USE_TZ = True
 
 STATIC_URL = '/static/'
+STATIC_ROOT = BASE_DIR / 'static'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
@@ -109,13 +122,15 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': 6,
 }
 
+USER_SERIALIZER = 'api.serializers.users.CustomUserSerializer'
+
 DJOSER = {
     'LOGIN_FIELD': 'email',
     'SERIALIZERS': {
-        'user_create': 'users.serializers.CustomUserCreateSerializer',
-        'user_list': 'users.serializers.CustomUserSerializer',
-        'current_user': 'users.serializers.CustomUserSerializer',
-        'user': 'users.serializers.CustomUserSerializer',
+        'user_create': 'api.serializers.users.CustomUserCreateSerializer',
+        'user_list': USER_SERIALIZER,
+        'current_user': USER_SERIALIZER,
+        'user': USER_SERIALIZER,
     },
     'PERMISSIONS': {
         'current_user': ['rest_framework.permissions.IsAuthenticated'],

@@ -8,8 +8,7 @@ from .models import Subscription, User
 class CustomUserAdmin(UserAdmin):
     list_display = ('id', 'username', 'email', 'first_name', 'last_name')
     list_filter = ('is_staff', 'is_active', 'is_superuser')
-    search_fields = ('email', 'username', 'first_name', 'last_name')
-    ordering = ('id',)
+    search_fields = ('email', 'username')
 
 
 @admin.register(Subscription)
