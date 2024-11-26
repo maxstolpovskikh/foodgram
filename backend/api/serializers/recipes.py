@@ -4,7 +4,8 @@ from rest_framework import serializers
 from api.fields import Base64ImageField
 from api.serializers.tags import TagSerializer
 from api.serializers.users import CustomUserSerializer
-from recipes.models import Ingredient, Recipe, RecipeIngredient, Tag
+from recipes.models import (MAX_AMOUNT, MIN_AMOUNT, Ingredient, Recipe,
+                            RecipeIngredient, Tag)
 
 
 class IngredientSerializer(serializers.ModelSerializer):
@@ -20,6 +21,10 @@ class IngredientInRecipeSerializer(serializers.ModelSerializer):
     name = serializers.ReadOnlyField(source='ingredient.name')
     measurement_unit = serializers.ReadOnlyField(
         source='ingredient.measurement_unit'
+    )
+    amount = serializers.IntegerField(
+        min_value=MIN_AMOUNT,
+        max_value=MAX_AMOUNT,
     )
 
     class Meta:
@@ -37,6 +42,10 @@ class RecipeSerializer(serializers.ModelSerializer):
     )
     is_favorited = serializers.SerializerMethodField()
     is_in_shopping_cart = serializers.SerializerMethodField()
+    cooking_time = serializers.IntegerField(
+        min_value=MIN_AMOUNT,
+        max_value=MAX_AMOUNT,
+    )
 
     class Meta:
         model = Recipe
@@ -53,22 +62,18 @@ class RecipeSerializer(serializers.ModelSerializer):
     def validate(self, data):
         tags = self.initial_data.get('tags')
         ingredients = self.initial_data.get('ingredients')
-        cooking_time = int(self.initial_data.get('cooking_time'))
 
-        if cooking_time < 1:
-            raise ValidationError('Слишком быстро')
+        if not tags:
+            raise ValidationError(
+                'Нужно добавить минимум один тег'
+            )
+        if not ingredients:
+            raise ValidationError(
+                'Нужно добавить минимум один ингредиент'
+            )
 
-        if not tags or not ingredients:
-            raise ValidationError("Недостаточно данных")
-
-        item_list = []
-        for item in ingredients:
-            if int(item['amount']) < 1:
-                raise ValidationError('Кол-во меньше 1')
-            if item['id'] in item_list:
-                raise ValidationError('Повторяющиеся ингридиенты')
-            item_list.append(item['id'])
-
+        if len(ingredients) != len({item['id'] for item in ingredients}):
+            raise ValidationError('Повторяющиеся ингридиенты')
         if len(tags) != len(set(tags)):
             raise ValidationError('Повторяющиеся теги')
 
@@ -80,43 +85,45 @@ class RecipeSerializer(serializers.ModelSerializer):
 
         return data
 
-    def create(self, validated_data):
-        ingredients = validated_data.pop('recipeingredient_set')
+    def _get_data(self, validated_data):
         tags = self.initial_data.get('tags')
-        recipe = Recipe.objects.create(**validated_data)
-        recipe.tags.set(tags)
-        for ingredient in ingredients:
-            RecipeIngredient.objects.create(
+        ingredients = validated_data.pop('recipeingredient_set')
+        return tags, ingredients
+
+    def _create_ingredients(self, recipe, ingredients):
+        RecipeIngredient.objects.bulk_create([
+            RecipeIngredient(
                 recipe=recipe,
                 ingredient=ingredient['id'],
                 amount=ingredient['amount']
             )
+            for ingredient in ingredients
+        ])
+
+    def create(self, validated_data):
+        tags, ingredients = self._get_data(validated_data)
+        recipe = Recipe.objects.create(**validated_data)
+        recipe.tags.set(tags)
+        self._create_ingredients(recipe, ingredients)
         return recipe
 
     def update(self, instance, validated_data):
-        tags = self.initial_data.get('tags')
+        tags, ingredients = self._get_data(validated_data)
         instance.tags.set(tags)
         instance.ingredients.clear()
-        ingredients = self.initial_data.get('ingredients')
-        for ingredient in ingredients:
-            amount = ingredient['amount']
-            ingredient_id = ingredient['id']
-            ingredient_obj = Ingredient.objects.get(id=ingredient_id)
-            RecipeIngredient.objects.create(
-                recipe=instance,
-                ingredient=ingredient_obj,
-                amount=amount
-            )
+        self._create_ingredients(instance, ingredients)
         return instance
 
-    def get_is_favorited(self, obj):
+    def _get_is_in_list(self, obj, model_field):
         request = self.context.get('request')
         if request and request.user.is_authenticated:
-            return obj.favorites.filter(user=request.user).exists()
+            return getattr(obj, model_field).filter(
+                user=request.user
+            ).exists()
         return False
 
+    def get_is_favorited(self, obj):
+        return self._get_is_in_list(obj, 'favorites')
+
     def get_is_in_shopping_cart(self, obj):
-        request = self.context.get('request')
-        if request and request.user.is_authenticated:
-            return obj.shopping_cart.filter(user=request.user).exists()
-        return False
+        return self._get_is_in_list(obj, 'shopping_cart')

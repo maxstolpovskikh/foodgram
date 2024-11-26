@@ -1,3 +1,4 @@
+from django.db.models import Count
 from django.shortcuts import get_object_or_404
 from djoser.views import UserViewSet
 from rest_framework import status
@@ -18,10 +19,9 @@ class AvatarView(APIView):
             request.user,
             data=request.data,
         )
-        if serializer.is_valid():
-            serializer.save()
-            return Response({'avatar': serializer.data['avatar']})
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response({'avatar': serializer.data['avatar']})
 
     def delete(self, request):
         request.user.avatar = None
@@ -37,44 +37,28 @@ class CustomUserViewSet(UserViewSet):
     )
     def subscribe(self, request, id=None):
         user = request.user
-        author = get_object_or_404(User, id=id)
+        author = get_object_or_404(
+            User.objects.annotate(
+                recipes_count=Count('recipes')
+            ),
+            id=id
+        )
+
+        serializer = SubscriptionSerializer(
+            author,
+            data={},
+            context={'request': request}
+        )
+        serializer.is_valid(raise_exception=True)
 
         if request.method == 'POST':
-            if user == author:
-                return Response(
-                    {'errors': 'Нельзя подписаться на самого себя'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            subscription, created = Subscription.objects.get_or_create(
-                user=user,
-                author=author
-            )
-
-            if created:
-                serializer = SubscriptionSerializer(
-                    author,
-                    context={'request': request}
-                )
-                return Response(
-                    serializer.data,
-                    status=status.HTTP_201_CREATED
-                )
+            Subscription.objects.create(user=user, author=author)
             return Response(
-                {'errors': 'Вы уже подписаны на этого пользователя'},
-                status=status.HTTP_400_BAD_REQUEST
+                serializer.data,
+                status=status.HTTP_201_CREATED
             )
 
-        subscription = Subscription.objects.filter(
-            user=user,
-            author=author
-        )
-        if not subscription.exists():
-            return Response(
-                {'errors': 'Подписка не существует'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        subscription.delete()
+        Subscription.objects.filter(user=user, author=author).delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(
@@ -84,9 +68,12 @@ class CustomUserViewSet(UserViewSet):
     )
     def subscriptions(self, request):
         user = request.user
-        pages = self.paginate_queryset(
-            User.objects.filter(subscribers__user=user)
+        queryset = User.objects.filter(
+            subscribers__user=user
+        ).annotate(
+            recipes_count=Count('recipes')
         )
+        pages = self.paginate_queryset(queryset)
         serializer = SubscriptionSerializer(
             pages,
             many=True,

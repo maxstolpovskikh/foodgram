@@ -1,3 +1,4 @@
+from django.db.models import Sum
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
@@ -60,6 +61,23 @@ class RecipeViewSet(viewsets.ModelViewSet):
                 )
         return queryset
 
+    def _handle_m2m_action(self, request, pk, model):
+        user = request.user
+        recipe = get_object_or_404(Recipe, id=pk)
+        obj = model.objects.filter(user=user, recipe=recipe)
+
+        if request.method == 'POST':
+            if obj.exists():
+                return Response(status=status.HTTP_400_BAD_REQUEST)
+            model.objects.create(user=user, recipe=recipe)
+            serializer = RecipeMinifiedSerializer(recipe)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+        if not obj.exists():
+            return Response(status=status.HTTP_400_BAD_REQUEST)
+        obj.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
     @action(
         detail=True,
         methods=['get'],
@@ -76,32 +94,7 @@ class RecipeViewSet(viewsets.ModelViewSet):
         permission_classes=[IsAuthenticated]
     )
     def shopping_cart(self, request, pk=None):
-        user = request.user
-        recipe = get_object_or_404(Recipe, id=pk)
-
-        if request.method == 'POST':
-            shopping_cart, created = ShoppingCart.objects.get_or_create(
-                user=user,
-                recipe=recipe
-            )
-            if created:
-                serializer = RecipeMinifiedSerializer(recipe)
-                return Response(
-                    serializer.data,
-                    status=status.HTTP_201_CREATED
-                )
-            return Response(
-                {'errors': 'Рецепт уже в списке покупок'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        shopping_cart = ShoppingCart.objects.filter(user=user, recipe=recipe)
-        if not shopping_cart.exists():
-            return Response(
-                {'errors': 'Рецепт не в списке покупок'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        shopping_cart.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
+        return self._handle_m2m_action(request, pk, ShoppingCart)
 
     @action(
         detail=True,
@@ -109,37 +102,7 @@ class RecipeViewSet(viewsets.ModelViewSet):
         permission_classes=[IsAuthenticated]
     )
     def favorite(self, request, pk=None):
-        user = request.user
-        recipe = get_object_or_404(Recipe, id=pk)
-
-        if request.method == 'POST':
-            favorite, created = Favorite.objects.get_or_create(
-                user=user,
-                recipe=recipe
-            )
-
-            if created:
-                serializer = RecipeMinifiedSerializer(recipe)
-                return Response(
-                    serializer.data,
-                    status=status.HTTP_201_CREATED
-                )
-            return Response(
-                {'errors': 'Рецепт уже в избранном'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        favorite = Favorite.objects.filter(
-            user=user,
-            recipe=recipe
-        )
-        if not favorite.exists():
-            return Response(
-                {'errors': 'Рецепт не в избранном'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        favorite.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
+        return self._handle_m2m_action(request, pk, Favorite)
 
     @action(
         detail=False,
@@ -147,24 +110,22 @@ class RecipeViewSet(viewsets.ModelViewSet):
         permission_classes=[IsAuthenticated]
     )
     def download_shopping_cart(self, request):
-        shopping_cart = ShoppingCart.objects.filter(user=request.user)
-        ingredients = {}
-        for item in shopping_cart:
-            recipe_ingredients = RecipeIngredient.objects.filter(
-                recipe=item.recipe
-            )
-            for recipe_ingredient in recipe_ingredients:
-                ingredient = recipe_ingredient.ingredient
-                amount = recipe_ingredient.amount
-                if ingredient in ingredients:
-                    ingredients[ingredient] += amount
-                else:
-                    ingredients[ingredient] = amount
-        shopping_list = []
-        for ingredient, amount in ingredients.items():
-            shopping_list.append(
-                f'{ingredient.name} ({ingredient.measurement_unit}) - {amount}'
-            )
+        ingredients = RecipeIngredient.objects.filter(
+            recipe__shopping_cart__user=request.user
+        ).values(
+            'ingredient__name',
+            'ingredient__measurement_unit'
+        ).annotate(
+            total_amount=Sum('amount')
+        ).order_by('ingredient__name')
+
+        shopping_list = [
+            f'{item["ingredient__name"]} '
+            f'({item["ingredient__measurement_unit"]}) - '
+            f'{item["total_amount"]}'
+            for item in ingredients
+        ]
+
         response = HttpResponse(
             'Список покупок:\n\n' + '\n'.join(shopping_list),
             content_type='text/plain'

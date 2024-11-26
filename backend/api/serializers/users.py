@@ -1,9 +1,11 @@
 from django.contrib.auth import get_user_model
-from djoser.serializers import UserCreateSerializer, UserSerializer
+from djoser.serializers import (UserCreateSerializer, UserSerializer,
+                                ValidationError)
 from rest_framework import serializers
 
-from .minifield import RecipeMinifiedSerializer
 from api.fields import Base64ImageField
+from users.models import Subscription
+from .minifield import RecipeMinifiedSerializer
 
 User = get_user_model()
 
@@ -42,7 +44,7 @@ class CustomUserSerializer(UserSerializer):
 
 class SubscriptionSerializer(CustomUserSerializer):
     recipes = serializers.SerializerMethodField()
-    recipes_count = serializers.SerializerMethodField()
+    recipes_count = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = User
@@ -57,6 +59,35 @@ class SubscriptionSerializer(CustomUserSerializer):
             'recipes',
             'recipes_count'
         )
+        read_only_fields = fields
+
+    def validate(self, data):
+        request = self.context.get('request')
+        if not request:
+            return data
+
+        author = self.instance
+        user = request.user
+        method = request.method
+
+        if method == 'POST':
+            if user == author:
+                raise ValidationError(
+                    'Нельзя подписаться на самого себя'
+                )
+            if Subscription.objects.filter(user=user, author=author).exists():
+                raise ValidationError(
+                    'Вы уже подписаны на этого пользователя'
+                )
+        elif method == 'DELETE':
+            if not Subscription.objects.filter(
+                user=user,
+                author=author
+            ).exists():
+                raise ValidationError(
+                    'Подписка не существует'
+                )
+        return data
 
     def get_recipes(self, obj):
         request = self.context.get('request')
@@ -65,9 +96,6 @@ class SubscriptionSerializer(CustomUserSerializer):
         if recipes_limit:
             recipes = recipes[:int(recipes_limit)]
         return RecipeMinifiedSerializer(recipes, many=True).data
-
-    def get_recipes_count(self, obj):
-        return obj.recipes.count()
 
 
 class AvatarSerializer(serializers.ModelSerializer):
