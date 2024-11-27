@@ -8,16 +8,12 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from api.filters import IngredientFilter
+from api.paginations import CustomPagination
 from api.permissions import IsAuthorOrReadOnly
 from api.serializers.minifield import RecipeMinifiedSerializer
 from api.serializers.recipes import IngredientSerializer, RecipeSerializer
-from recipes.models import (
-    Favorite,
-    Ingredient,
-    Recipe,
-    RecipeIngredient,
-    ShoppingCart
-)
+from recipes.models import (Favorite, Ingredient, Recipe, RecipeIngredient,
+                            ShoppingCart)
 
 
 class IngredientViewSet(viewsets.ReadOnlyModelViewSet):
@@ -34,7 +30,7 @@ class RecipeViewSet(viewsets.ModelViewSet):
     serializer_class = RecipeSerializer
     filter_backends = (DjangoFilterBackend,)
     permission_classes = [IsAuthorOrReadOnly]
-    pagination_class = None
+    pagination_class = CustomPagination
 
     def perform_create(self, serializer):
         serializer.save(author=self.request.user)
