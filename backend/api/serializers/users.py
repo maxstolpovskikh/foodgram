@@ -63,30 +63,24 @@ class SubscriptionSerializer(CustomUserSerializer):
 
     def validate(self, data):
         request = self.context.get('request')
-        if not request:
-            return data
-
         author = self.instance
         user = request.user
         method = request.method
+        subscription_exists = author.subscribers.filter(user=user).exists()
 
         if method == 'POST':
             if user == author:
                 raise ValidationError(
                     'Нельзя подписаться на самого себя'
                 )
-            if Subscription.objects.filter(user=user, author=author).exists():
+            if subscription_exists:
                 raise ValidationError(
                     'Вы уже подписаны на этого пользователя'
                 )
-        elif method == 'DELETE':
-            if not Subscription.objects.filter(
-                user=user,
-                author=author
-            ).exists():
-                raise ValidationError(
-                    'Подписка не существует'
-                )
+        if method == 'DELETE' and not subscription_exists:
+            raise ValidationError(
+                'Подписка не существует'
+            )
         return data
 
     def get_recipes(self, obj):
